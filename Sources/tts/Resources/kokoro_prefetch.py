@@ -49,6 +49,21 @@ def main() -> int:
             ignore_patterns=["voices/*.pt", "voices/*.onnx", "voices/*.bin"],
         )
         log("snapshot_download finished.")
+        
+        # Pre-download spacy model required by kokoro
+        try:
+            import spacy
+            try:
+                spacy.load("en_core_web_sm")
+                log("spacy model already installed.")
+            except OSError:
+                log("Downloading spacy en_core_web_sm model...")
+                from spacy.cli import download
+                download("en_core_web_sm")
+                log("spacy model installed.")
+        except ImportError:
+            log("spacy not installed, skipping model download.")
+        
         print("Kokoro repo cached.")
         return 0
     except Exception as exc:

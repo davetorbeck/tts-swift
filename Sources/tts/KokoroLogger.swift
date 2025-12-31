@@ -1,9 +1,15 @@
 import Foundation
 
 enum KokoroLogger {
+    static var isEnabled: Bool {
+        ProcessInfo.processInfo.environment["DEBUG"] == "1"
+    }
+    
     static func log(title: String, result: (exitCode: Int32, stdout: String, stderr: String)) -> String {
         let output = format(title: title, result: result)
-        print(output)
+        if isEnabled {
+            print(output)
+        }
         return output
     }
 

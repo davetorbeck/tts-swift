@@ -3,6 +3,12 @@ import Carbon
 @preconcurrency import ApplicationServices
 import SwiftUI
 
+struct TimedWord: Codable {
+    let word: String
+    let start: Double
+    let end: Double
+}
+
 @main
 struct TTSApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -22,7 +28,7 @@ struct TTSApp: App {
 }
 
 @MainActor
-final class AppState: ObservableObject {
+final class AppState: NSObject, ObservableObject {
     static let shared = AppState()
 
     enum SetupState: Equatable {
@@ -72,13 +78,19 @@ final class AppState: ObservableObject {
     @Published var setupState: SetupState = .idle
     @Published var setupLog: String = ""
     @Published var permissionStatus: String = Strings.accessibilityNotChecked
+    @Published var wordTimings: [TimedWord] = []
+    @Published var currentWordIndex: Int? = nil
 
     private var player: AVAudioPlayer?
-    private var hotKeyManager: HotKeyManager?
+    private var playbackTimer: Timer?
+    var hotKeyManager: HotKeyManager?
 
-    private init() {
-        hotKeyManager = HotKeyManager { [weak self] in
-            self?.speakSelectedText()
+    private override init() {
+        super.init()
+        hotKeyManager = HotKeyManager {
+            Task { @MainActor in
+                AppState.shared.speakSelectedText()
+            }
         }
     }
 
@@ -106,13 +118,15 @@ final class AppState: ObservableObject {
                     self.isSettingUp = false
                     self.status = Strings.synthesizing
                 }
-                let wavURL = try KokoroRunner.synthesize(text: text, voice: voice, language: language)
+                let (wavURL, timingsURL) = try KokoroRunner.synthesize(text: text, voice: voice, language: language)
                 await MainActor.run {
                     do {
+                        self.wordTimings = try KokoroRunner.loadTimings(from: timingsURL)
                         self.player = try AVAudioPlayer(contentsOf: wavURL)
                         self.player?.prepareToPlay()
                         self.player?.play()
                         self.status = Strings.playingAudio
+                        self.startPlaybackTracking()
                     } catch {
                         self.status = "\(Strings.failedToPlayAudioPrefix)\(error.localizedDescription)"
                     }
@@ -200,10 +214,37 @@ final class AppState: ObservableObject {
 
     func stop() {
         player?.stop()
+        playbackTimer?.invalidate()
+        playbackTimer = nil
+        currentWordIndex = nil
         status = "Stopped"
         isRunning = false
     }
-
+    
+    private func startPlaybackTracking() {
+        playbackTimer?.invalidate()
+        playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self = self else { return }
+                guard let player = self.player, let currentTime = player.currentTime as TimeInterval? else {
+                    return
+                }
+                
+                var newIndex: Int? = nil
+                for (index, timing) in self.wordTimings.enumerated() {
+                    if currentTime >= timing.start && currentTime < timing.end {
+                        newIndex = index
+                        break
+                    }
+                }
+                
+                if newIndex != self.currentWordIndex {
+                    self.currentWordIndex = newIndex
+                }
+            }
+        }
+    }
+    
     func openMainWindow() {
         AppDelegate.shared?.showWindow()
     }
@@ -212,8 +253,10 @@ final class AppState: ObservableObject {
         ensureAccessibilityPermission(prompt: true)
         if let selected = SelectedTextProvider.getSelectedText() {
             text = selected
+            HUDWindow.show(message: "Speaking...")
             speak()
         } else {
+            HUDWindow.show(message: "No text selected")
             status = "No selected text found. Grant Accessibility permission and try again."
         }
     }
@@ -222,6 +265,35 @@ final class AppState: ObservableObject {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: prompt] as CFDictionary
         let trusted = AXIsProcessTrustedWithOptions(options)
         permissionStatus = trusted ? "Accessibility granted" : "Accessibility not granted"
+    }
+
+    func reregisterHotKey() {
+        hotKeyManager?.reregister()
+    }
+}
+
+struct HighlightedTextView: View {
+    let text: String
+    let wordTimings: [TimedWord]
+    let currentWordIndex: Int?
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(wordTimings.enumerated()), id: \.offset) { index, timing in
+                        Text(timing.word)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(index == currentWordIndex ? Color.yellow.opacity(0.6) : Color.gray.opacity(0.1))
+                            .cornerRadius(4)
+                            .font(.body)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(8)
+            }
+        }
     }
 }
 
@@ -240,9 +312,15 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Text")
                     .font(.headline)
-                TextEditor(text: $state.text)
-                    .frame(minHeight: 140)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(.gray.opacity(0.2)))
+                if state.isRunning && !state.wordTimings.isEmpty {
+                    HighlightedTextView(text: state.text, wordTimings: state.wordTimings, currentWordIndex: state.currentWordIndex)
+                        .frame(minHeight: 140)
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(.gray.opacity(0.2)))
+                } else {
+                    TextEditor(text: $state.text)
+                        .frame(minHeight: 140)
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(.gray.opacity(0.2)))
+                }
             }
 
             HStack(spacing: 12) {
@@ -301,13 +379,27 @@ struct ContentView: View {
                     .font(.footnote)
             }
 
-            if (state.isSettingUp || state.debugSetupLogs), !state.setupLog.isEmpty {
+            if KokoroLogger.isEnabled, !state.setupLog.isEmpty {
                 Text(state.setupLog)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(6)
                     .textSelection(.enabled)
             }
+
+            HStack(spacing: 4) {
+                Text("Hotkey:")
+                    .foregroundStyle(.secondary)
+                Text("⌃⌘A")
+                    .font(.system(.footnote, design: .rounded).weight(.medium))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.quaternary)
+                    .cornerRadius(4)
+                Text("speaks selected text")
+                    .foregroundStyle(.secondary)
+            }
+            .font(.footnote)
 
             Text(state.permissionStatus)
                 .foregroundStyle(.secondary)
@@ -390,7 +482,6 @@ enum KokoroRunner {
         try FileManager.default.createDirectory(at: supportDir, withIntermediateDirectories: true)
 
         let venvDir = supportDir.appendingPathComponent("venv", isDirectory: true)
-        print("[DEBUG] Creating venv at: \(venvDir.path)")
         let createVenv = runProcessStreaming(
             message: Strings.setupCreatingVenv,
             update: update,
@@ -425,7 +516,7 @@ enum KokoroRunner {
         print("[DEBUG] prepareEnvironment completed successfully")
     }
 
-    static func synthesize(text: String, voice: String, language: String) throws -> URL {
+    static func synthesize(text: String, voice: String, language: String) throws -> (audioURL: URL, timingsURL: URL) {
         print("[DEBUG] synthesize called - text: \(text.prefix(50))..., voice: \(voice), lang: \(language)")
         guard let scriptURL = resourceBundle().url(forResource: "kokoro_say", withExtension: "py") else {
             print("[DEBUG] kokoro_say.py not found in bundle")
@@ -436,6 +527,7 @@ enum KokoroRunner {
         let outputDir = FileManager.default.temporaryDirectory.appendingPathComponent("tts-swift", isDirectory: true)
         try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
         let outputURL = outputDir.appendingPathComponent("kokoro.wav")
+        let timingsURL = outputDir.appendingPathComponent("kokoro_timings.json")
 
         let process = Process()
         let stderrPipe = Pipe()
@@ -452,7 +544,8 @@ enum KokoroRunner {
             "--text", text,
             "--voice", voice,
             "--lang", language,
-            "--out", outputURL.path
+            "--out", outputURL.path,
+            "--timings", timingsURL.path
         ]
 
         if let repo = repoOverride, !repo.isEmpty {
@@ -488,7 +581,12 @@ enum KokoroRunner {
             throw RunnerError.missingOutput
         }
 
-        return outputURL
+        return (outputURL, timingsURL)
+    }
+    
+    static func loadTimings(from url: URL) throws -> [TimedWord] {
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder().decode([TimedWord].self, from: data)
     }
 
     static func listVoices(voice: String? = nil, listAll: Bool = false) throws -> [String] {
@@ -713,12 +811,82 @@ enum Strings {
     static let appSupportFolderName = "tts-swift"
 }
 
-final class HotKeyManager {
+@MainActor
+final class HUDWindow {
+    private static var window: NSWindow?
+    private static var hideTask: Task<Void, Never>?
+
+    static func show(message: String, duration: TimeInterval = 1.5) {
+        hideTask?.cancel()
+
+        let label = NSTextField(labelWithString: message)
+        label.font = .systemFont(ofSize: 18, weight: .medium)
+        label.textColor = .white
+        label.alignment = .center
+        label.sizeToFit()
+
+        let padding: CGFloat = 24
+        let width = max(label.frame.width + padding * 2, 160)
+        let height: CGFloat = 56
+
+        let visualEffect = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: width, height: height))
+        visualEffect.material = .hudWindow
+        visualEffect.state = .active
+        visualEffect.wantsLayer = true
+        visualEffect.layer?.cornerRadius = 12
+
+        label.frame = NSRect(x: padding, y: (height - label.frame.height) / 2, width: label.frame.width, height: label.frame.height)
+        visualEffect.addSubview(label)
+
+        if window == nil {
+            let w = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: width, height: height),
+                styleMask: .borderless,
+                backing: .buffered,
+                defer: false
+            )
+            w.isOpaque = false
+            w.backgroundColor = .clear
+            w.level = .floating
+            w.collectionBehavior = [.canJoinAllSpaces, .stationary]
+            w.ignoresMouseEvents = true
+            window = w
+        }
+
+        window?.setContentSize(NSSize(width: width, height: height))
+        window?.contentView = visualEffect
+
+        if let screen = NSScreen.main {
+            let x = (screen.frame.width - width) / 2
+            let y = screen.frame.height * 0.75
+            window?.setFrameOrigin(NSPoint(x: x, y: y))
+        }
+
+        window?.alphaValue = 1
+        window?.orderFrontRegardless()
+
+        hideTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+            if !Task.isCancelled {
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.3
+                    window?.animator().alphaValue = 0
+                } completionHandler: {
+                    Task { @MainActor in
+                        window?.orderOut(nil)
+                    }
+                }
+            }
+        }
+    }
+}
+
+final class HotKeyManager: @unchecked Sendable {
     private var hotKeyRef: EventHotKeyRef?
     private var handlerRef: EventHandlerRef?
-    private let handler: () -> Void
+    private let handler: @Sendable () -> Void
 
-    init(handler: @escaping () -> Void) {
+    init(handler: @escaping @Sendable () -> Void) {
         self.handler = handler
         register()
     }
@@ -730,6 +898,18 @@ final class HotKeyManager {
         if let handlerRef = handlerRef {
             RemoveEventHandler(handlerRef)
         }
+    }
+
+    func reregister() {
+        if let hotKeyRef = hotKeyRef {
+            UnregisterEventHotKey(hotKeyRef)
+            self.hotKeyRef = nil
+        }
+        if let handlerRef = handlerRef {
+            RemoveEventHandler(handlerRef)
+            self.handlerRef = nil
+        }
+        register()
     }
 
     private func register() {
@@ -746,7 +926,10 @@ final class HotKeyManager {
         let handlerStatus = InstallEventHandler(GetApplicationEventTarget(), { _, _, userData in
             guard let userData = userData else { return noErr }
             let manager = Unmanaged<HotKeyManager>.fromOpaque(userData).takeUnretainedValue()
-            manager.handler()
+            let handler = manager.handler
+            DispatchQueue.main.async {
+                handler()
+            }
             return noErr
         }, 1, &eventSpec, UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque()), &installedHandler)
 
@@ -792,7 +975,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         showWindow()
         AppState.shared.startBackgroundSetup()
+        promptAccessibilityPermission()
+    }
 
+    private func promptAccessibilityPermission() {
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        let trusted = AXIsProcessTrustedWithOptions(options)
+        AppState.shared.permissionStatus = trusted ? "Accessibility granted" : "Accessibility not granted"
+        AppState.shared.reregisterHotKey()
     }
 
     func showWindow() {

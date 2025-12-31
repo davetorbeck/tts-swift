@@ -1,9 +1,9 @@
 {
-  "venvPath": ".",
+  "include": ["Sources/tts/Resources"],
+  "venvPath": "Sources/tts/Resources",
   "venv": ".venv",
   "reportMissingImports": "none",
-  "reportMissingModuleSource": "none",
+  "reportMissingModuleSource": "none", 
   "reportMissingTypeStubs": "none",
-  "reportUnusedImport": "none",
   "typeCheckingMode": "off"
 }
