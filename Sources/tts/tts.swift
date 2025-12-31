@@ -98,6 +98,8 @@ final class AppState: NSObject, ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         isRunning = true
+        wordTimings = []
+        currentWordIndex = nil
         status = Strings.synthesizing
 
         Task.detached { [text = trimmed, voice = self.voice, language = self.language] in
@@ -122,6 +124,8 @@ final class AppState: NSObject, ObservableObject {
                 await MainActor.run {
                     do {
                         self.wordTimings = try KokoroRunner.loadTimings(from: timingsURL)
+                        self.currentWordIndex = self.wordTimings.isEmpty ? nil : 0
+                        FloatingOutputWindow.show()
                         self.player = try AVAudioPlayer(contentsOf: wavURL)
                         self.player?.prepareToPlay()
                         self.player?.play()
@@ -216,6 +220,7 @@ final class AppState: NSObject, ObservableObject {
         player?.stop()
         playbackTimer?.invalidate()
         playbackTimer = nil
+        wordTimings = []
         currentWordIndex = nil
         status = "Stopped"
         isRunning = false
@@ -278,21 +283,78 @@ struct HighlightedTextView: View {
     let currentWordIndex: Int?
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(wordTimings.enumerated()), id: \.offset) { index, timing in
-                        Text(timing.word)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(index == currentWordIndex ? Color.yellow.opacity(0.6) : Color.gray.opacity(0.1))
-                            .cornerRadius(4)
-                            .font(.body)
+                if wordTimings.isEmpty {
+                    Text("Press Speak to see highlighted output")
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                } else {
+                    FlowLayout(spacing: 4) {
+                        ForEach(Array(wordTimings.enumerated()), id: \.offset) { index, timing in
+                            Text(timing.word)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(index == currentWordIndex ? Color.accentColor.opacity(0.4) : Color.clear)
+                                .cornerRadius(4)
+                                .font(.body)
+                                .id(index)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+                }
+            }
+            .onChange(of: currentWordIndex) { newIndex in
+                if let idx = newIndex {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        proxy.scrollTo(idx, anchor: .center)
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(8)
             }
+        }
+    }
+}
+
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 4
+    
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let containerWidth = proposal.width ?? .infinity
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var lineHeight: CGFloat = 0
+        
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX + size.width > containerWidth && currentX > 0 {
+                currentX = 0
+                currentY += lineHeight + spacing
+                lineHeight = 0
+            }
+            currentX += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+        
+        return CGSize(width: containerWidth, height: currentY + lineHeight)
+    }
+    
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var currentX: CGFloat = bounds.minX
+        var currentY: CGFloat = bounds.minY
+        var lineHeight: CGFloat = 0
+        
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX + size.width > bounds.maxX && currentX > bounds.minX {
+                currentX = bounds.minX
+                currentY += lineHeight + spacing
+                lineHeight = 0
+            }
+            subview.place(at: CGPoint(x: currentX, y: currentY), proposal: .unspecified)
+            currentX += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
         }
     }
 }
@@ -309,15 +371,19 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Text")
-                    .font(.headline)
-                if state.isRunning && !state.wordTimings.isEmpty {
-                    HighlightedTextView(text: state.text, wordTimings: state.wordTimings, currentWordIndex: state.currentWordIndex)
+            HStack(alignment: .top, spacing: 16) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Input")
+                        .font(.headline)
+                    TextEditor(text: $state.text)
                         .frame(minHeight: 140)
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(.gray.opacity(0.2)))
-                } else {
-                    TextEditor(text: $state.text)
+                }
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Output")
+                        .font(.headline)
+                    HighlightedTextView(text: state.text, wordTimings: state.wordTimings, currentWordIndex: state.currentWordIndex)
                         .frame(minHeight: 140)
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(.gray.opacity(0.2)))
                 }

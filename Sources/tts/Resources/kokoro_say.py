@@ -54,6 +54,10 @@ def main() -> int:
                 if is_punctuation_only:
                     continue
                 
+                # Skip tokens with missing timestamps
+                if token.start_ts is None or token.end_ts is None:
+                    continue
+                
                 word_timings.append({
                     "word": token.text,
                     "start": current_time + token.start_ts,
