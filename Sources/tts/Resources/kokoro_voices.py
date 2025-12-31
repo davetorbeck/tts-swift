@@ -4,6 +4,9 @@ import json
 import os
 import sys
 
+# Disable HF progress bars to keep stdout clean for JSON parsing
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="List Kokoro voices from Hugging Face repo")

@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 import argparse
+import os
 import sys
+
+# Disable HF progress bars to keep stdout clean
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 
 
 def main() -> int:
@@ -24,9 +28,16 @@ def main() -> int:
         return 1
 
     try:
+        # Only download the voice file we need, not the entire repo
         snapshot_download(
             repo_id=args.repo,
             revision=args.revision or None,
+            allow_patterns=[
+                "*.json",
+                "*.txt",
+                "kokoro-v*.pth",
+                f"voices/{args.voice}.pt",
+            ],
         )
         pipeline = KPipeline(lang_code=args.lang)
         audio_chunks = []

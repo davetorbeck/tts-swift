@@ -390,12 +390,16 @@ enum KokoroRunner {
         try FileManager.default.createDirectory(at: supportDir, withIntermediateDirectories: true)
 
         let venvDir = supportDir.appendingPathComponent("venv", isDirectory: true)
+        print("[DEBUG] Creating venv at: \(venvDir.path)")
         let createVenv = runProcessStreaming(
             message: Strings.setupCreatingVenv,
             update: update,
             executable: "/usr/bin/env",
-            arguments: ["uv", "venv", venvDir.path]
+            arguments: ["uv", "venv", "--seed", venvDir.path]
         )
+        print("[DEBUG] uv venv exit code: \(createVenv.exitCode)")
+        print("[DEBUG] uv venv stdout: \(createVenv.stdout)")
+        print("[DEBUG] uv venv stderr: \(createVenv.stderr)")
         guard createVenv.exitCode == 0 else {
             throw RunnerError.setupFailed("\(Strings.uvVenvFailedPrefix)\(createVenv.stderr)")
         }
@@ -403,23 +407,31 @@ enum KokoroRunner {
         await update(Strings.setupCreatedVenv, createLog)
 
         await update(Strings.setupInstallingDeps, "")
+        print("[DEBUG] Installing deps with python: \(pythonURL.path)")
         let installDeps = runProcessStreaming(
             message: Strings.setupInstallingDeps,
             update: update,
             executable: "/usr/bin/env",
             arguments: ["uv", "pip", "install", "--python", pythonURL.path, "kokoro>=0.9.4", "huggingface_hub", "soundfile", "numpy"]
         )
+        print("[DEBUG] uv pip install exit code: \(installDeps.exitCode)")
+        print("[DEBUG] uv pip install stdout: \(installDeps.stdout)")
+        print("[DEBUG] uv pip install stderr: \(installDeps.stderr)")
         guard installDeps.exitCode == 0 else {
             throw RunnerError.setupFailed("\(Strings.uvPipFailedPrefix)\(installDeps.stderr)")
         }
         let installLog = KokoroLogger.log(title: "uv pip install", result: installDeps)
         await update(Strings.setupInstalledDeps, installLog)
+        print("[DEBUG] prepareEnvironment completed successfully")
     }
 
     static func synthesize(text: String, voice: String, language: String) throws -> URL {
+        print("[DEBUG] synthesize called - text: \(text.prefix(50))..., voice: \(voice), lang: \(language)")
         guard let scriptURL = resourceBundle().url(forResource: "kokoro_say", withExtension: "py") else {
+            print("[DEBUG] kokoro_say.py not found in bundle")
             throw RunnerError.missingScript
         }
+        print("[DEBUG] Script URL: \(scriptURL.path)")
 
         let outputDir = FileManager.default.temporaryDirectory.appendingPathComponent("tts-swift", isDirectory: true)
         try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
@@ -778,9 +790,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
-        print("david")
         showWindow()
         AppState.shared.startBackgroundSetup()
+
     }
 
     func showWindow() {

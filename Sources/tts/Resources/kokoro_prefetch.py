@@ -4,6 +4,9 @@ import os
 import sys
 import time
 
+# Disable HF progress bars to keep stdout clean
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Prefetch Kokoro model repo from Hugging Face")
@@ -30,9 +33,20 @@ def main() -> int:
         log(f"HF_HOME={os.environ.get('HF_HOME', '')}")
         log(f"HF_HUB_CACHE={os.environ.get('HF_HUB_CACHE', '')}")
         log("Starting snapshot_download...")
+        # Download only essential files, not all 72 voices
+        # This avoids rate limiting on unauthenticated requests
         snapshot_download(
             repo_id=args.repo,
             revision=args.revision or None,
+            allow_patterns=[
+                "*.json",
+                "*.txt", 
+                "*.py",
+                "*.model",
+                "kokoro-v*.onnx",
+                "voices/af_heart.pt",  # Default voice only
+            ],
+            ignore_patterns=["voices/*.pt", "voices/*.onnx", "voices/*.bin"],
         )
         log("snapshot_download finished.")
         print("Kokoro repo cached.")
