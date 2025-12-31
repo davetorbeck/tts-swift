@@ -1,0 +1,22 @@
+name: tts
+options:
+  bundleIdPrefix: com.example
+targets:
+  tts:
+    type: application
+    platform: macOS
+    deploymentTarget: "13.0"
+    sources:
+      - path: Sources/tts
+    resources:
+      - path: Sources/tts/Resources
+    info:
+      path: tts-Info.plist
+      properties:
+        CFBundleName: tts
+        CFBundleDisplayName: tts
+        CFBundleIdentifier: com.example.tts
+        CFBundleVersion: "1"
+        CFBundleShortVersionString: "1.0"
+        LSApplicationCategoryType: public.app-category.utilities
+        NSPrincipalClass: NSApplication
