@@ -359,24 +359,127 @@ struct FlowLayout: Layout {
     }
 }
 
-struct ContentView: View {
+struct SidebarView: View {
     @EnvironmentObject private var state: AppState
-
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 20) {
+            // Voice Section
             VStack(alignment: .leading, spacing: 8) {
-                Text("Kokoro TTS")
-                    .font(.system(size: 28, weight: .semibold, design: .rounded))
-                Text("Uses a local Python Kokoro install to synthesize audio")
+                Label("Voice", systemImage: "waveform")
+                    .font(.headline)
+                
+                if state.availableVoices.isEmpty {
+                    TextField("af_heart", text: $state.voice)
+                        .textFieldStyle(.roundedBorder)
+                } else {
+                    Picker("Voice", selection: $state.voice) {
+                        ForEach(state.availableVoices, id: \.self) { voice in
+                            Text(voice).tag(voice)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                }
+            }
+            
+            // Language Section
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Language", systemImage: "globe")
+                    .font(.headline)
+                
+                TextField("a", text: $state.language)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 80)
+            }
+            
+            Divider()
+            
+            // Settings Section
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Settings", systemImage: "gear")
+                    .font(.headline)
+                
+                Toggle("Always on top", isOn: $state.alwaysOnTop)
+                    .toggleStyle(.checkbox)
+            }
+            
+            Divider()
+            
+            // Hotkey Info
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Hotkey", systemImage: "keyboard")
+                    .font(.headline)
+                
+                HStack(spacing: 4) {
+                    Text("⌃⌘A")
+                        .font(.system(.body, design: .rounded).weight(.medium))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.quaternary)
+                        .cornerRadius(6)
+                }
+                
+                Text("Speaks selected text")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            
+            Spacer()
+            
+            // Status Section
+            VStack(alignment: .leading, spacing: 8) {
+                if state.isSettingUp {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text(state.setupState.label)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(state.setupState == .ready ? Color.green : Color.orange)
+                            .frame(width: 8, height: 8)
+                        Text(state.status)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+                
+                Text(state.permissionStatus)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding()
+        .frame(maxWidth: 200)
+    }
+}
 
+struct MainContentView: View {
+    @EnvironmentObject private var state: AppState
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Header
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Kokoro TTS")
+                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                Text("Local text-to-speech synthesis")
+                    .foregroundStyle(.secondary)
+                    .font(.subheadline)
+            }
+            
+            // Input/Output Areas
             HStack(alignment: .top, spacing: 16) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Input")
                         .font(.headline)
                     TextEditor(text: $state.text)
-                        .frame(minHeight: 140)
+                        .frame(minHeight: 200)
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(.gray.opacity(0.2)))
                 }
                 
@@ -384,98 +487,64 @@ struct ContentView: View {
                     Text("Output")
                         .font(.headline)
                     HighlightedTextView(text: state.text, wordTimings: state.wordTimings, currentWordIndex: state.currentWordIndex)
-                        .frame(minHeight: 140)
+                        .frame(minHeight: 200)
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(.gray.opacity(0.2)))
                 }
             }
-
+            
+            // Action Buttons
             HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Voice")
-                        .font(.headline)
-                    if state.availableVoices.isEmpty {
-                        TextField("af_heart", text: $state.voice)
-                            .textFieldStyle(.roundedBorder)
-                    } else {
-                        Picker("Voice", selection: $state.voice) {
-                            ForEach(state.availableVoices, id: \.self) { voice in
-                                Text(voice).tag(voice)
-                            }
-                        }
-                        .frame(minWidth: 180)
-                        .pickerStyle(.menu)
-                    }
-                }
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Lang")
-                        .font(.headline)
-                    TextField("a", text: $state.language)
-                        .frame(width: 60)
-                        .textFieldStyle(.roundedBorder)
-                }
-                Spacer()
-            }
-
-            HStack(spacing: 12) {
-                Button("Speak") {
+                Button {
                     state.speak()
+                } label: {
+                    Label("Speak", systemImage: "play.fill")
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(state.isRunning || state.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                Button("Stop") {
+                .buttonStyle(.borderedProminent)
+                
+                Button {
                     state.stop()
+                } label: {
+                    Label("Stop", systemImage: "stop.fill")
                 }
                 .disabled(state.isRunning == false && state.status != "Playing audio")
-
+                .buttonStyle(.bordered)
+                
                 Spacer()
             }
-
-            if state.isSettingUp {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text(state.setupState.label)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            } else {
-                Text(state.status)
-                    .foregroundStyle(.secondary)
-                    .font(.footnote)
-            }
-
+            
+            // Debug Logs (if enabled)
             if KokoroLogger.isEnabled, !state.setupLog.isEmpty {
                 Text(state.setupLog)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(6)
                     .textSelection(.enabled)
+                    .padding(8)
+                    .background(.quaternary.opacity(0.5))
+                    .cornerRadius(6)
             }
-
-            HStack(spacing: 4) {
-                Text("Hotkey:")
-                    .foregroundStyle(.secondary)
-                Text("⌃⌘A")
-                    .font(.system(.footnote, design: .rounded).weight(.medium))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(.quaternary)
-                    .cornerRadius(4)
-                Text("speaks selected text")
-                    .foregroundStyle(.secondary)
-            }
-            .font(.footnote)
-
-            Text(state.permissionStatus)
-                .foregroundStyle(.secondary)
-                .font(.footnote)
-
+            
             Spacer()
         }
-        .padding(24)
+        .padding(20)
     }
+}
 
+struct ContentView: View {
+    @EnvironmentObject private var state: AppState
+
+    var body: some View {
+        NavigationSplitView {
+            SidebarView()
+                .environmentObject(state)
+                .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 200)
+        } detail: {
+            MainContentView()
+                .environmentObject(state)
+        }
+    }
 }
 
 struct MenuBarView: View {
