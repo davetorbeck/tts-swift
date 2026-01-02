@@ -1,6 +1,6 @@
 # tts-swift
 
-A minimal macOS SwiftUI app that calls Kokoro locally via Python and plays the generated WAV.
+A minimal macOS SwiftUI app that calls Kokoro locally via Python and plays the generated WAV. Features real-time word highlighting during playback with a floating HUD display.
 
 ## Prerequisites
 

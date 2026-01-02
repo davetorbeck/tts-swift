@@ -4,8 +4,10 @@ enum KokoroLogger {
     static var isEnabled: Bool {
         ProcessInfo.processInfo.environment["DEBUG"] == "1"
     }
-    
-    static func log(title: String, result: (exitCode: Int32, stdout: String, stderr: String)) -> String {
+
+    static func log(title: String, result: (exitCode: Int32, stdout: String, stderr: String))
+        -> String
+    {
         let output = format(title: title, result: result)
         if isEnabled {
             print(output)
@@ -13,7 +15,9 @@ enum KokoroLogger {
         return output
     }
 
-    static func format(title: String, result: (exitCode: Int32, stdout: String, stderr: String)) -> String {
+    static func format(title: String, result: (exitCode: Int32, stdout: String, stderr: String))
+        -> String
+    {
         var parts: [String] = []
         let stdout = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
         let stderr = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "tts-swift",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v15)
     ],
     targets: [
         .executableTarget(
