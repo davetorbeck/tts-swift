@@ -6,6 +6,8 @@
 - [ ] Character limit for input text (~1000 chars, needs testing to find model threshold)
 - [ ] Prompt user for accessibility permissions on startup
 - [ ] Add descriptions to Kokoro voices
+- [ ] Improve first-launch voice download UX (see docs/features/VOICE-DOWNLOAD-UX.md)
+- [ ] Add placeholder app icon
 
 ## Pre-Release Tasks
 
@@ -43,7 +45,8 @@ Minimum viable product release for tts-swift - a macOS text-to-speech applicatio
 - [x] Audio playback using AVAudioPlayer (24 kHz WAV)
 - [x] Word timing tracker synchronized with audio playback
 - [x] Play/Stop controls
-- [x] Status display during synthesis and playback
+- [x] Playback speed control (0.25x - 2.0x) with stepper arrows and dropdown menu
+- [x] Status indicator in bottom toolbar
 
 ### Hotkey & Accessibility
 - [x] Global hotkey activation (⌃⌘A)

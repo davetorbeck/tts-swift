@@ -5,7 +5,6 @@ struct MainContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Input/Output Areas
             HStack(alignment: .top, spacing: 16) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Input")
@@ -28,32 +27,11 @@ struct MainContentView: View {
                 }
             }
 
-            // Action Buttons
-            HStack(spacing: 12) {
-                Button {
-                    state.speak()
-                } label: {
-                    Label("Speak", systemImage: "play.fill")
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(
-                    state.isRunning
-                        || state.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                )
-                .buttonStyle(.borderedProminent)
-
-                Button {
-                    state.stop()
-                } label: {
-                    Label("Stop", systemImage: "stop.fill")
-                }
-                .disabled(state.isRunning == false && state.status != "Playing audio")
-                .buttonStyle(.bordered)
-
+            HStack {
+                PlaybackControlsView()
                 Spacer()
             }
 
-            // Debug Logs (if enabled)
             if KokoroLogger.isEnabled, !state.setupLog.isEmpty {
                 Text(state.setupLog)
                     .font(.caption2)

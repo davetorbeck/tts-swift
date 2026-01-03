@@ -4,6 +4,7 @@ import AVFoundation
 protocol AudioPlayable: AnyObject {
     var currentTime: TimeInterval { get }
     var isPlaying: Bool { get }
+    var rate: Float { get set }
     func play(url: URL) throws
     func stop()
 }
@@ -20,8 +21,14 @@ final class TTSAudioPlayer: AudioPlayable {
         player?.isPlaying ?? false
     }
 
+    var rate: Float {
+        get { player?.rate ?? 1.0 }
+        set { player?.rate = newValue }
+    }
+
     func play(url: URL) throws {
         player = try AVAudioPlayer(contentsOf: url)
+        player?.enableRate = true
         player?.prepareToPlay()
         player?.play()
     }

@@ -68,22 +68,22 @@ struct FloatingOutputContent: View {
             } else {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        FlowLayout(spacing: 4) {
+                        FlowLayout(spacing: 2) {
                             ForEach(Array(state.wordTimings.enumerated()), id: \.offset) { index, timing in
                                 Text(timing.word)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 1)
                                     .background(
-                                index == state.currentWordIndex
-                                    ? Color.accentColor.opacity(0.4) : Color.clear
-                            )
-                                    .cornerRadius(4)
-                                    .font(.system(size: 16))
+                                        index == state.currentWordIndex
+                                            ? Color.accentColor.opacity(0.4) : Color.clear
+                                    )
+                                    .cornerRadius(3)
+                                    .font(.system(size: 15))
                                     .id(index)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(12)
+                        .padding(10)
                     }
                     .onChange(of: state.currentWordIndex) { _, newIndex in
                         if let idx = newIndex {

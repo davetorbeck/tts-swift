@@ -20,16 +20,37 @@ struct ContentView: View {
                     .environmentObject(state)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        sidebarVisible.toggle()
+                HStack(spacing: 12) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            sidebarVisible.toggle()
+                        }
+                    } label: {
+                        Image(systemName: "sidebar.leading")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
                     }
-                } label: {
-                    Image(systemName: "sidebar.leading")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
+                    .buttonStyle(.plain)
+
+                    if state.isSettingUp {
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .controlSize(.mini)
+                            Text(state.setupState.label)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(state.setupState == .ready ? Color.green : Color.orange)
+                                .frame(width: 6, height: 6)
+                            Text(state.status)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
-                .buttonStyle(.plain)
                 .padding(12)
             }
         }

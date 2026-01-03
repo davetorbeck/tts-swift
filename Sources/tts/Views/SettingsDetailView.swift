@@ -24,32 +24,6 @@ struct SettingsDetailView: View {
                 .padding(8)
             }
 
-            GroupBox("Status") {
-                VStack(alignment: .leading, spacing: 8) {
-                    if state.isSettingUp {
-                        HStack(spacing: 8) {
-                            ProgressView()
-                                .controlSize(.small)
-                            Text(state.setupState.label)
-                                .foregroundStyle(.secondary)
-                        }
-                    } else {
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(state.setupState == .ready ? Color.green : Color.orange)
-                                .frame(width: 8, height: 8)
-                            Text(state.status)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Text(state.permissionStatus)
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(8)
-            }
-
             Spacer()
         }
         .padding(20)

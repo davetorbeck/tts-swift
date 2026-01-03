@@ -104,6 +104,9 @@ final class AppState: NSObject, ObservableObject {
     @Published var permissionStatus: String = Strings.accessibilityNotChecked
     @Published var wordTimings: [TimedWord] = []
     @Published var currentWordIndex: Int?
+    @AppStorage("playbackSpeed") var playbackSpeed: Double = 1.0 {
+        didSet { audioPlayer.rate = Float(playbackSpeed) }
+    }
 
     private var wordIndexObserver: AnyCancellable?
 
@@ -168,6 +171,7 @@ final class AppState: NSObject, ObservableObject {
                         self.wordTimings = try synthesizer.loadTimings(from: result.timingsURL)
                         FloatingOutputWindow.show()
                         try self.audioPlayer.play(url: result.audioURL)
+                        self.audioPlayer.rate = Float(self.playbackSpeed)
                         self.wordTimingTracker.start(timings: self.wordTimings, audioPlayer: self.audioPlayer)
                         self.status = Strings.playingAudio
                     } catch {
