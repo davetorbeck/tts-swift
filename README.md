@@ -42,6 +42,84 @@ export KOKORO_REPO=hexgrad/Kokoro-82M
 export KOKORO_REVISION=main
 ```
 
+## Architecture
+
+```
+                           tts-swift
+    ┌─────────────────────────────────────────────────────┐
+    │                                                     │
+    │   INPUT                                             │
+    │   ├─ UI TextEditor (MainContentView)               │
+    │   └─ Global Hotkey ⌃⌥⌘T (HotKeyManager)            │
+    │          │                                          │
+    │          ▼                                          │
+    │   ┌─────────────────────────────────────────┐      │
+    │   │           AppState (Singleton)          │      │
+    │   │  • text, voice, language                │      │
+    │   │  • wordTimings, currentWordIndex        │      │
+    │   │  • AVAudioPlayer + playback timer       │      │
+    │   └─────────────────┬───────────────────────┘      │
+    │                     │                               │
+    │                     ▼                               │
+    │   ┌─────────────────────────────────────────┐      │
+    │   │           KokoroRunner (Swift)          │      │
+    │   │  • Manages Python venv (~/.tts-swift/)  │      │
+    │   │  • Runs ProcessRunner with PTY          │      │
+    │   └─────────────────┬───────────────────────┘      │
+    │                     │                               │
+    │                     ▼                               │
+    │   ┌─────────────────────────────────────────┐      │
+    │   │         kokoro_say.py (Python)          │      │
+    │   │  • KPipeline + Hugging Face model       │      │
+    │   │  • espeak-ng for phonemes               │      │
+    │   │  • Outputs: kokoro.wav + timings.json   │      │
+    │   └─────────────────┬───────────────────────┘      │
+    │                     │                               │
+    │                     ▼                               │
+    │   OUTPUT                                            │
+    │   ├─ AVAudioPlayer (24 kHz WAV playback)           │
+    │   ├─ 50ms timer updates currentWordIndex           │
+    │   ├─ FloatingOutputWindow (HUD with highlights)    │
+    │   └─ HighlightedTextView (main window)             │
+    │                                                     │
+    └─────────────────────────────────────────────────────┘
+```
+
+### UI Layout
+
+```
+┌─ Menu Bar ──────────────────────────────────────────────────────┐
+│  [♪] ▼                                                          │
+│      ├─ Speak Selected Text (⌃⌘A)                               │
+│      ├─ Always on top (⌃⌘T)                                     │
+│      ├─ Open Window                                             │
+│      └─ Quit                                                    │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─ Main Window ───────────────────────────────────────────────────┐
+│ ┌─ Sidebar ─┐ ┌─ Detail View ─────────────────────────────────┐ │
+│ │           │ │                                               │ │
+│ │ ♪ Voices  │ │  Input                    Output              │ │
+│ │ ⚙ Settings│ │  ┌─────────────────┐     ┌─────────────────┐  │ │
+│ │           │ │  │                 │     │ Hello [world]   │  │ │
+│ │           │ │  │ Hello world     │     │ ← highlighted   │  │ │
+│ │           │ │  │                 │     │                 │  │ │
+│ │           │ │  └─────────────────┘     └─────────────────┘  │ │
+│ │           │ │                                               │ │
+│ │           │ │  [▶ Speak]  [■ Stop]                          │ │
+│ │           │ │                                               │ │
+│ └───────────┘ └───────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─ Floating HUD (during playback) ────────────────────────────────┐
+│  Now Speaking                                             ─ □ x │
+│ ┌───────────────────────────────────────────────────────────┐   │
+│ │  Hello [world] this is a test of the text to speech       │   │
+│ │  system with word highlighting and auto-scroll            │   │
+│ └───────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
 ## How it works
 
 - SwiftUI calls a bundled script at `Sources/tts/Resources/kokoro_say.py` to synthesize a WAV.
