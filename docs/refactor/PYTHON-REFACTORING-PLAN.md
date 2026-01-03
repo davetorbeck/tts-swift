@@ -7,17 +7,17 @@ This document outlines SOLID principles and unit testing opportunities for the P
 ## Task List
 
 ### SOLID Refactoring
-- [ ] Extract voice file utilities into shared module
+- [x] Extract voice file utilities into shared module
 - [ ] Extract HuggingFace client wrapper for testability
-- [ ] Extract word timing extraction from `kokoro_say.py`
-- [ ] Create constants for voice file extensions
+- [x] Extract word timing extraction from `kokoro_say.py`
+- [x] Create constants for voice file extensions
 
 ### Unit Tests (Non-Trivial Logic)
-- [ ] `test_punctuation_filtering` - token filtering in kokoro_say.py
-- [ ] `test_word_timing_accumulation` - time offset calculations
-- [ ] `test_find_downloaded_voices_in_cache` - cache path traversal
-- [ ] `test_allow_patterns_construction` - pattern building logic
-- [ ] `test_extension_fallback_chain` - .pt → .onnx → .bin ordering
+- [x] `test_punctuation_filtering` - token filtering in kokoro_say.py
+- [x] `test_word_timing_accumulation` - time offset calculations
+- [x] `test_find_downloaded_voices_in_cache` - cache path traversal
+- [x] `test_allow_patterns_construction` - pattern building logic
+- [x] `test_extension_fallback_chain` - .pt → .onnx → .bin ordering
 
 ---
 
@@ -355,36 +355,37 @@ class TestExtensionFallback(unittest.TestCase):
 
 ---
 
-## Proposed File Structure
+## Implemented File Structure
 
 ```
 Sources/tts/Resources/
-├── kokoro_say.py           # Simplified, uses shared modules
-├── kokoro_voices.py        # Simplified, uses shared modules
-├── kokoro_list_remote.py   # Already clean
-├── kokoro_download_voice.py # Already clean
+├── kokoro_say.py           # Simplified, uses lib/word_timing
+├── kokoro_voices.py        # Simplified, uses lib/voice_utils
+├── kokoro_list_remote.py   # Uses lib/voice_utils
+├── kokoro_download_voice.py # Uses lib/voice_utils
 ├── kokoro_prefetch.py      # Already clean
 ├── lib/
-│   ├── __init__.py
-│   ├── voice_utils.py      # Shared voice file utilities
-│   ├── word_timing.py      # Word timing extraction
-│   └── hf_client.py        # HuggingFace wrapper (optional)
-├── test_kokoro.py          # Existing + new tests
+│   ├── __init__.py         # Exports all shared utilities
+│   ├── voice_utils.py      # VOICE_EXTENSIONS, is_voice_file, get_voice_name, voice_patterns_for
+│   └── word_timing.py      # PUNCTUATION_TAGS, is_punctuation_only, extract_word_timings
+├── test_kokoro.py          # 28 tests covering all shared utilities
 └── pyrightconfig.json
 ```
 
+Note: `hf_client.py` wrapper deferred - only implement if mocking HuggingFace becomes painful.
+
 ---
 
-## Implementation Priority
+## Implementation Status
 
-| Priority | Task | Effort | Impact |
-|----------|------|--------|--------|
-| **High** | Add punctuation filtering tests | Low | Documents edge cases |
-| **High** | Add word timing accumulation tests | Low | Core feature correctness |
-| **High** | Add cache traversal tests | Medium | Prevents regressions |
-| **Medium** | Extract `voice_utils.py` | Low | DRY, single source of truth |
-| **Medium** | Extract `word_timing.py` | Low | Enables unit testing |
-| **Low** | Create `hf_client.py` wrapper | Medium | Only if mocking HF becomes painful |
+| Priority | Task | Effort | Impact | Status |
+|----------|------|--------|--------|--------|
+| **High** | Add punctuation filtering tests | Low | Documents edge cases | Done |
+| **High** | Add word timing accumulation tests | Low | Core feature correctness | Done |
+| **High** | Add cache traversal tests | Medium | Prevents regressions | Done |
+| **Medium** | Extract `voice_utils.py` | Low | DRY, single source of truth | Done |
+| **Medium** | Extract `word_timing.py` | Low | Enables unit testing | Done |
+| **Low** | Create `hf_client.py` wrapper | Medium | Only if mocking HF becomes painful | Deferred |
 
 ---
 
