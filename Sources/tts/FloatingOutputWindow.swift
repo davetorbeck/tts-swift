@@ -5,39 +5,39 @@ import SwiftUI
 final class FloatingOutputWindow {
     private static var window: NSWindow?
     private static var hostingView: NSHostingView<AnyView>?
-    
+
     static func show() {
         if window == nil {
-            let w = NSWindow(
+            let newWindow = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 400, height: 200),
                 styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
                 backing: .buffered,
                 defer: false
             )
-            w.title = "Now Speaking"
-            w.titlebarAppearsTransparent = true
-            w.isMovableByWindowBackground = true
-            w.level = .floating
-            w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            w.isReleasedWhenClosed = false
-            w.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.95)
-            window = w
-            
+            newWindow.title = "Now Speaking"
+            newWindow.titlebarAppearsTransparent = true
+            newWindow.isMovableByWindowBackground = true
+            newWindow.level = .floating
+            newWindow.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            newWindow.isReleasedWhenClosed = false
+            newWindow.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.95)
+            window = newWindow
+
             if let screen = NSScreen.main {
-                let x = screen.frame.maxX - 420
-                let y = screen.frame.maxY - 280
-                w.setFrameOrigin(NSPoint(x: x, y: y))
+                let originX = screen.frame.maxX - 420
+                let originY = screen.frame.maxY - 280
+                newWindow.setFrameOrigin(NSPoint(x: originX, y: originY))
             }
         }
-        
+
         updateContent()
         window?.orderFront(nil)
     }
-    
+
     static func updateContent() {
         let content = FloatingOutputContent()
             .environmentObject(AppState.shared)
-        
+
         if let existingHosting = hostingView {
             existingHosting.rootView = AnyView(content)
         } else {
@@ -46,11 +46,11 @@ final class FloatingOutputWindow {
             window?.contentView = hosting
         }
     }
-    
+
     static func hide() {
         window?.orderOut(nil)
     }
-    
+
     static var isVisible: Bool {
         window?.isVisible ?? false
     }
@@ -58,7 +58,7 @@ final class FloatingOutputWindow {
 
 struct FloatingOutputContent: View {
     @EnvironmentObject private var state: AppState
-    
+
     var body: some View {
         VStack(spacing: 0) {
             if state.wordTimings.isEmpty {
@@ -73,7 +73,10 @@ struct FloatingOutputContent: View {
                                 Text(timing.word)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 3)
-                                    .background(index == state.currentWordIndex ? Color.accentColor.opacity(0.4) : Color.clear)
+                                    .background(
+                                index == state.currentWordIndex
+                                    ? Color.accentColor.opacity(0.4) : Color.clear
+                            )
                                     .cornerRadius(4)
                                     .font(.system(size: 16))
                                     .id(index)
@@ -82,7 +85,7 @@ struct FloatingOutputContent: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(12)
                     }
-                    .onChange(of: state.currentWordIndex) { newIndex in
+                    .onChange(of: state.currentWordIndex) { _, newIndex in
                         if let idx = newIndex {
                             withAnimation(.easeInOut(duration: 0.15)) {
                                 proxy.scrollTo(idx, anchor: .center)

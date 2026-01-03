@@ -40,7 +40,7 @@ struct HighlightedTextView: View {
                 }
             }
             // Auto-scroll to keep current word visible
-            .onChange(of: currentWordIndex) { newIndex in
+            .onChange(of: currentWordIndex) { _, newIndex in
                 if let idx = newIndex {
                     withAnimation(.easeInOut(duration: 0.15)) {
                         proxy.scrollTo(idx, anchor: .center)

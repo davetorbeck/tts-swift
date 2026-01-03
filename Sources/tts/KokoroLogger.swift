@@ -6,8 +6,7 @@ enum KokoroLogger {
     }
 
     static func log(title: String, result: (exitCode: Int32, stdout: String, stderr: String))
-        -> String
-    {
+    -> String {
         let output = format(title: title, result: result)
         if isEnabled {
             print(output)
@@ -16,8 +15,7 @@ enum KokoroLogger {
     }
 
     static func format(title: String, result: (exitCode: Int32, stdout: String, stderr: String))
-        -> String
-    {
+    -> String {
         var parts: [String] = []
         let stdout = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
         let stderr = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)

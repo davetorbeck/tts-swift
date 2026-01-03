@@ -8,16 +8,20 @@ let package = Package(
     platforms: [
         .macOS(.v15)
     ],
+    dependencies: [
+        .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", from: "2.4.0")
+    ],
     targets: [
         .executableTarget(
             name: "tts",
+            dependencies: ["KeyboardShortcuts"],
             resources: [
                 .process("Resources")
             ]
         ),
         .testTarget(
             name: "ttsTests",
-            dependencies: ["tts"]
-        ),
+            dependencies: ["tts", "KeyboardShortcuts"]
+        )
     ]
 )

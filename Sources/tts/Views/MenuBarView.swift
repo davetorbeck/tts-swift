@@ -15,7 +15,7 @@ struct MenuBarView: View {
                 .keyboardShortcut("t", modifiers: [.command, .control])
 
             #if DEBUG
-                Toggle("Debug setup logs", isOn: $state.debugSetupLogs)
+            Toggle("Debug setup logs", isOn: $state.debugSetupLogs)
             #endif
 
             Divider()

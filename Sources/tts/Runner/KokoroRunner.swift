@@ -31,12 +31,10 @@ enum KokoroRunner {
     /// Prepares the Python virtual environment, creating it and installing dependencies if needed.
     /// - Parameter update: Callback for progress updates (message, log).
     static func prepareEnvironment(_ update: @escaping @MainActor (String, String) async -> Void)
-        async throws
-    {
+    async throws {
         // Allow override via environment variable
         if let pythonOverride = ProcessInfo.processInfo.environment["KOKORO_PY"],
-            !pythonOverride.isEmpty
-        {
+           !pythonOverride.isEmpty {
             return
         }
 
@@ -76,7 +74,7 @@ enum KokoroRunner {
             executable: "/usr/bin/env",
             arguments: [
                 "uv", "pip", "install", "--python", pythonURL.path, "kokoro>=0.9.4",
-                "huggingface_hub", "soundfile", "numpy",
+                "huggingface_hub", "soundfile", "numpy"
             ]
         )
         print("[DEBUG] uv pip install exit code: \(installDeps.exitCode)")
@@ -135,7 +133,7 @@ enum KokoroRunner {
             "--voice", voice,
             "--lang", language,
             "--out", outputURL.path,
-            "--timings", timingsURL.path,
+            "--timings", timingsURL.path
         ]
 
         if let repo = repoOverride, !repo.isEmpty {
@@ -449,8 +447,7 @@ enum KokoroRunner {
         }
 
         let liveLog = LiveLog()
-        let result = ProcessRunner.runPTY(executable: executable, arguments: arguments) {
-            chunk, _ in
+        let result = ProcessRunner.runPTY(executable: executable, arguments: arguments) { chunk, _ in
             let normalized = chunk.replacingOccurrences(of: "\r", with: "\n")
             let snapshot = liveLog.append(normalized)
             Task { @MainActor in
@@ -463,25 +460,25 @@ enum KokoroRunner {
     /// Returns the bundle containing Python script resources.
     private static func resourceBundle() -> Bundle {
         #if SWIFT_PACKAGE
-            return Bundle.module
+        return Bundle.module
         #else
-            return Bundle.main
+        return Bundle.main
         #endif
     }
 
     // MARK: - Test Helpers
 
     #if DEBUG
-        static func appSupportDirForTests() -> URL { appSupportDir() }
-        static func venvPythonURLForTests() -> URL { venvPythonURL() }
-        static func runProcessForTests(executable: String, arguments: [String]) -> (
-            exitCode: Int32, stdout: String, stderr: String
-        ) {
-            runProcess(executable: executable, arguments: arguments)
-        }
-        static func decodeVoicesForTests(_ input: String) throws -> [String] {
-            let data = Data(input.utf8)
-            return try JSONDecoder().decode([String].self, from: data)
-        }
+    static func appSupportDirForTests() -> URL { appSupportDir() }
+    static func venvPythonURLForTests() -> URL { venvPythonURL() }
+    static func runProcessForTests(executable: String, arguments: [String]) -> (
+        exitCode: Int32, stdout: String, stderr: String
+    ) {
+        runProcess(executable: executable, arguments: arguments)
+    }
+    static func decodeVoicesForTests(_ input: String) throws -> [String] {
+        let data = Data(input.utf8)
+        return try JSONDecoder().decode([String].self, from: data)
+    }
     #endif
 }

@@ -24,7 +24,7 @@ struct VoicePickerView: View {
         .labelsHidden()
         .pickerStyle(.menu)
         .onAppear { selectedVoice = state.voice }
-        .onChange(of: selectedVoice) { newVoice in
+        .onChange(of: selectedVoice) { _, newVoice in
             handleVoiceSelection(newVoice)
         }
     }

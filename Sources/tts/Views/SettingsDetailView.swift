@@ -1,3 +1,4 @@
+import KeyboardShortcuts
 import SwiftUI
 
 struct SettingsDetailView: View {
@@ -17,14 +18,7 @@ struct SettingsDetailView: View {
             GroupBox("Hotkey") {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("⌃⌘A")
-                            .font(.system(.body, design: .rounded).weight(.medium))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.quaternary)
-                            .cornerRadius(6)
-                        Text("Speaks selected text")
-                            .foregroundStyle(.secondary)
+                        KeyboardShortcuts.Recorder("Speak selected text:", name: .speakSelectedText)
                     }
                 }
                 .padding(8)

@@ -21,14 +21,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         promptAccessibilityPermission()
     }
 
-    /// Prompts the user for accessibility permission if not already granted.
     private func promptAccessibilityPermission() {
         let options =
             [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         let trusted = AXIsProcessTrustedWithOptions(options)
         AppState.shared.permissionStatus =
             trusted ? "Accessibility granted" : "Accessibility not granted"
-        AppState.shared.reregisterHotKey()
     }
 
     /// Shows or creates the main application window.

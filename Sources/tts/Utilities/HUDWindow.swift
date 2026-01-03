@@ -44,30 +44,28 @@ final class HUDWindow {
         )
         visualEffect.addSubview(label)
 
-        // Create or reuse the window
         if window == nil {
-            let w = NSWindow(
+            let newWindow = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: width, height: height),
                 styleMask: .borderless,
                 backing: .buffered,
                 defer: false
             )
-            w.isOpaque = false
-            w.backgroundColor = .clear
-            w.level = .floating
-            w.collectionBehavior = [.canJoinAllSpaces, .stationary]
-            w.ignoresMouseEvents = true
-            window = w
+            newWindow.isOpaque = false
+            newWindow.backgroundColor = .clear
+            newWindow.level = .floating
+            newWindow.collectionBehavior = [.canJoinAllSpaces, .stationary]
+            newWindow.ignoresMouseEvents = true
+            window = newWindow
         }
 
         window?.setContentSize(NSSize(width: width, height: height))
         window?.contentView = visualEffect
 
-        // Position the window in the upper-center of the screen
         if let screen = NSScreen.main {
-            let x = (screen.frame.width - width) / 2
-            let y = screen.frame.height * 0.75
-            window?.setFrameOrigin(NSPoint(x: x, y: y))
+            let originX = (screen.frame.width - width) / 2
+            let originY = screen.frame.height * 0.75
+            window?.setFrameOrigin(NSPoint(x: originX, y: originY))
         }
 
         // Show the window

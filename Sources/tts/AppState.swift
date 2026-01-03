@@ -1,4 +1,6 @@
 import AVFoundation
+import Combine
+import KeyboardShortcuts
 import SwiftUI
 @preconcurrency import ApplicationServices
 
@@ -36,9 +38,6 @@ enum KokoroLanguage: String, CaseIterable, Identifiable {
 final class AppState: NSObject, ObservableObject {
     static let shared = AppState()
 
-    // MARK: - Setup State
-
-    /// Represents the current state of the Python environment setup.
     enum SetupState: Equatable {
         case idle
         case creatingVenv
@@ -65,7 +64,16 @@ final class AppState: NSObject, ObservableObject {
         }
     }
 
-    // MARK: - Persisted Settings
+    // MARK: - Dependencies
+
+    private let audioPlayer: AudioPlayable
+    private let wordTimingTracker: WordTimingTracker
+    private let environment: TTSEnvironmentProviding
+    private let synthesizer: TTSSynthesizing
+    private let voiceRepository: VoiceRepositoryProviding
+    private let textProvider: TextProviding
+
+    // MARK: - Settings
 
     @AppStorage("alwaysOnTop") var alwaysOnTop: Bool = true {
         didSet {
@@ -79,14 +87,14 @@ final class AppState: NSObject, ObservableObject {
     let debugSetupLogs: Bool = false
     #endif
 
-    // MARK: - Published State
+    // MARK: - State
 
     @Published var text: String = Strings.defaultText
     @Published var voice: String = "af_heart"
     @Published var availableVoices: [String] = []
     @Published var downloadedVoices: Set<String> = []
     @Published var isDownloadingVoice: Bool = false
-    @Published var downloadingVoiceName: String? = nil
+    @Published var downloadingVoiceName: String?
     @Published var language: KokoroLanguage = .americanEnglish
     @Published var status: String = Strings.setupIdle
     @Published var isRunning: Bool = false
@@ -95,28 +103,39 @@ final class AppState: NSObject, ObservableObject {
     @Published var setupLog: String = ""
     @Published var permissionStatus: String = Strings.accessibilityNotChecked
     @Published var wordTimings: [TimedWord] = []
-    @Published var currentWordIndex: Int? = nil
+    @Published var currentWordIndex: Int?
 
-    // MARK: - Private Properties
+    private var wordIndexObserver: AnyCancellable?
 
-    private var player: AVAudioPlayer?
-    private var playbackTimer: Timer?
-    var hotKeyManager: HotKeyManager?
-
-    // MARK: - Initialization
-
-    private override init() {
+    init(
+        audioPlayer: AudioPlayable = TTSAudioPlayer(),
+        wordTimingTracker: WordTimingTracker = WordTimingTracker(),
+        environment: TTSEnvironmentProviding = KokoroEnvironment(),
+        synthesizer: TTSSynthesizing = KokoroSynthesizer(),
+        voiceRepository: VoiceRepositoryProviding = KokoroVoiceRepository(),
+        textProvider: TextProviding = SystemTextProvider()
+    ) {
+        self.audioPlayer = audioPlayer
+        self.wordTimingTracker = wordTimingTracker
+        self.environment = environment
+        self.synthesizer = synthesizer
+        self.voiceRepository = voiceRepository
+        self.textProvider = textProvider
         super.init()
-        hotKeyManager = HotKeyManager {
+
+        wordIndexObserver = wordTimingTracker.$currentWordIndex
+            .receive(on: RunLoop.main)
+            .sink { [weak self] newIndex in
+                self?.currentWordIndex = newIndex
+            }
+
+        KeyboardShortcuts.onKeyUp(for: .speakSelectedText) { [weak self] in
             Task { @MainActor in
-                AppState.shared.speakSelectedText()
+                self?.speakSelectedText()
             }
         }
     }
 
-    // MARK: - Synthesis
-
-    /// Synthesizes and plays the current text.
     func speak() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -125,13 +144,13 @@ final class AppState: NSObject, ObservableObject {
         currentWordIndex = nil
         status = Strings.synthesizing
 
-        Task.detached { [text = trimmed, voice = self.voice, language = self.language.rawValue] in
+        Task.detached { [text = trimmed, voice = self.voice, language = self.language.rawValue, environment = self.environment, synthesizer = self.synthesizer] in
             do {
                 await MainActor.run {
                     self.isSettingUp = true
                     self.setupLog = ""
                 }
-                try await KokoroRunner.prepareEnvironment { message, log in
+                try await environment.prepare { message, log in
                     await MainActor.run {
                         self.status = message
                         if !log.isEmpty {
@@ -143,17 +162,14 @@ final class AppState: NSObject, ObservableObject {
                     self.isSettingUp = false
                     self.status = Strings.synthesizing
                 }
-                let (wavURL, timingsURL) = try KokoroRunner.synthesize(text: text, voice: voice, language: language)
+                let result = try synthesizer.synthesize(text: text, voice: voice, language: language)
                 await MainActor.run {
                     do {
-                        self.wordTimings = try KokoroRunner.loadTimings(from: timingsURL)
-                        self.currentWordIndex = self.wordTimings.isEmpty ? nil : 0
+                        self.wordTimings = try synthesizer.loadTimings(from: result.timingsURL)
                         FloatingOutputWindow.show()
-                        self.player = try AVAudioPlayer(contentsOf: wavURL)
-                        self.player?.prepareToPlay()
-                        self.player?.play()
+                        try self.audioPlayer.play(url: result.audioURL)
+                        self.wordTimingTracker.start(timings: self.wordTimings, audioPlayer: self.audioPlayer)
                         self.status = Strings.playingAudio
-                        self.startPlaybackTracking()
                     } catch {
                         self.status = "\(Strings.failedToPlayAudioPrefix)\(error.localizedDescription)"
                     }
@@ -171,11 +187,11 @@ final class AppState: NSObject, ObservableObject {
 
     func loadVoices() async {
         do {
-            let voiceList = try KokoroRunner.listRemoteVoices()
-            availableVoices = voiceList.voices
+            let voiceList = try voiceRepository.listRemote()
+            availableVoices = voiceList.available
             downloadedVoices = Set(voiceList.downloaded)
-            if !voiceList.voices.isEmpty, !voiceList.voices.contains(voice) {
-                voice = voiceList.downloaded.first ?? voiceList.voices.first ?? voice
+            if !voiceList.available.isEmpty, !voiceList.available.contains(voice) {
+                voice = voiceList.downloaded.first ?? voiceList.available.first ?? voice
             }
         } catch {
             status = "\(Strings.failedToLoadVoicesPrefix)\(error.localizedDescription)"
@@ -187,9 +203,9 @@ final class AppState: NSObject, ObservableObject {
         isDownloadingVoice = true
         downloadingVoiceName = voiceName
 
-        Task.detached {
+        Task.detached { [voiceRepository = self.voiceRepository] in
             do {
-                try await KokoroRunner.downloadVoice(voiceName) { message, log in
+                try await voiceRepository.download(voiceName) { message, log in
                     await MainActor.run {
                         AppState.shared.status = message
                         if !log.isEmpty {
@@ -214,18 +230,17 @@ final class AppState: NSObject, ObservableObject {
         }
     }
 
-    /// Starts background setup of the Python environment and voice loading.
     func startBackgroundSetup() {
-        Task.detached(priority: .background) {
+        Task.detached(priority: .background) { [environment = self.environment, voiceRepository = self.voiceRepository] in
             do {
-                let cached = KokoroRunner.hasCachedVenv()
+                let cached = environment.isReady
                 await MainActor.run {
                     AppState.shared.isSettingUp = true
                     AppState.shared.setupState = cached ? .loadingVoices : .creatingVenv
                     AppState.shared.status = cached ? Strings.setupLoadingVoices : Strings.setupCreatingVenv
                     AppState.shared.setupLog = ""
                 }
-                try await KokoroRunner.prepareEnvironment { message, log in
+                try await environment.prepare { message, log in
                     await MainActor.run {
                         AppState.shared.status = message
                         if message.lowercased().contains("install") {
@@ -243,7 +258,7 @@ final class AppState: NSObject, ObservableObject {
                     AppState.shared.status = Strings.setupLoadingVoices
                     AppState.shared.setupLog = ""
                 }
-                try await KokoroRunner.prefetchRepo(message: Strings.setupDownloadingModel) { message, log in
+                try await voiceRepository.prefetchRepo(message: Strings.setupDownloadingModel) { message, log in
                     await MainActor.run {
                         AppState.shared.status = message
                         if !log.isEmpty {
@@ -251,10 +266,10 @@ final class AppState: NSObject, ObservableObject {
                         }
                     }
                 }
-                let voiceList = try KokoroRunner.listRemoteVoices()
+                let voiceList = try voiceRepository.listRemote()
                 await MainActor.run {
                     AppState.shared.setupState = .loadingVoices
-                    AppState.shared.availableVoices = voiceList.voices
+                    AppState.shared.availableVoices = voiceList.available
                     AppState.shared.downloadedVoices = Set(voiceList.downloaded)
                     if !voiceList.downloaded.contains(AppState.shared.voice) {
                         AppState.shared.voice = voiceList.downloaded.first ?? "af_heart"
@@ -273,51 +288,22 @@ final class AppState: NSObject, ObservableObject {
         }
     }
 
-    /// Stops the current playback.
     func stop() {
-        player?.stop()
-        playbackTimer?.invalidate()
-        playbackTimer = nil
+        audioPlayer.stop()
+        wordTimingTracker.stop()
         wordTimings = []
         currentWordIndex = nil
         status = "Stopped"
         isRunning = false
     }
 
-    /// Starts a timer to track playback position and update word highlighting.
-    private func startPlaybackTracking() {
-        playbackTimer?.invalidate()
-        playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self = self else { return }
-                guard let player = self.player, let currentTime = player.currentTime as TimeInterval? else {
-                    return
-                }
-
-                var newIndex: Int? = nil
-                for (index, timing) in self.wordTimings.enumerated() {
-                    if currentTime >= timing.start && currentTime < timing.end {
-                        newIndex = index
-                        break
-                    }
-                }
-
-                if newIndex != self.currentWordIndex {
-                    self.currentWordIndex = newIndex
-                }
-            }
-        }
-    }
-
-    /// Opens the main application window.
     func openMainWindow() {
         AppDelegate.shared?.showWindow()
     }
 
-    /// Speaks the currently selected text from any application.
     func speakSelectedText() {
         ensureAccessibilityPermission(prompt: true)
-        if let selected = SelectedTextProvider.getSelectedText() {
+        if let selected = textProvider.getSelectedText() {
             text = selected
             HUDWindow.show(message: "Speaking...")
             speak()
@@ -327,15 +313,9 @@ final class AppState: NSObject, ObservableObject {
         }
     }
 
-    /// Checks and optionally prompts for accessibility permission.
     private func ensureAccessibilityPermission(prompt: Bool) {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: prompt] as CFDictionary
         let trusted = AXIsProcessTrustedWithOptions(options)
         permissionStatus = trusted ? "Accessibility granted" : "Accessibility not granted"
-    }
-
-    /// Re-registers the global hotkey (useful after permissions change).
-    func reregisterHotKey() {
-        hotKeyManager?.reregister()
     }
 }

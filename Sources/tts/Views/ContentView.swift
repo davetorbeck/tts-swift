@@ -11,15 +11,15 @@ struct ContentView: View {
                 SidebarView(selectedItem: $selectedItem)
                     .environmentObject(state)
                     .frame(width: 180)
-                
+
                 Divider()
             }
-            
+
             ZStack(alignment: .bottomLeading) {
                 detailView
                     .environmentObject(state)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                
+
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         sidebarVisible.toggle()
