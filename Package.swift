@@ -16,7 +16,7 @@ let package = Package(
             name: "tts",
             dependencies: ["KeyboardShortcuts"],
             resources: [
-                .process("Resources")
+                .copy("Resources")
             ]
         ),
         .testTarget(
